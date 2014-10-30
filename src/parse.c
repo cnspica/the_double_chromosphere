@@ -260,18 +260,62 @@ void clean(void)
 	system(system_cmd);
 }
 
+static char url_suffix[][12] = {
+	"2014-01-01",
+	"2013-01-01",
+	"2012-01-01",
+	"2011-01-01",
+	"2010-01-01",
+	"2009-01-01",
+	"2008-01-01",
+	"2007-01-01",
+	"2006-01-01",
+	"2005-01-01",
+	"2004-01-01",
+	"2003-01-01",
+};
+
 int main(int argc, char *argv[])
 {
-	char url[] = BASE_URL "2014-01-01";
+	char url[64];
+	char *ptr = NULL, break_tag = 0;
+	int issues = 0, index = 0, parse_issues;
+	static int issues_one_year = 153, max_issues = 1200;
 
-	if (-1 == wget_page_from_url(url)) {
-		printf("Get baidu pages failed, the program exit\n");
+	if (argc != 2) {
+		printf("Usage:\n\t%s [how many issues]\n", argv[0]);
 		return 0;
 	}
 
-	page_parse();
+	issues = atoi(argv[1]);
+	if (issues <= 0)
+		issues = issues_one_year;
 
-	print_result(ball_counter(1000));
+	do {
+		memset(url, 0, sizeof(url));
+		memcpy(url, BASE_URL, strlen(BASE_URL));
+		strcat(url, url_suffix[index++]);
+		issues -= issues_one_year;
+
+		if (-1 == wget_page_from_url(url)) {
+			printf("Get baidu pages failed, the program exit\n");
+			return 0;
+		}
+		page_parse();
+
+		if (index >= sizeof(url_suffix) / sizeof(url_suffix[0])) {
+			break_tag = 1;
+			break;
+		}
+	} while (issues > 0);
+
+	if (break_tag)
+		parse_issues =
+			issues_one_year * (sizeof(url_suffix) / sizeof(url_suffix[0]));
+	else
+		parse_issues = issues_one_year * index + issues;
+
+	print_result(ball_counter(parse_issues));
 	clean();
 	return 0;
 }
