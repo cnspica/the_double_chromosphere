@@ -53,8 +53,23 @@ typedef enum {
 	phase_blue_ball = 4,
 } lecai_lottery_find_phase_enum;
 
-unsigned int total_red_ball[34];
-unsigned int total_blue_ball[17];
+static char url_suffix[][12] = {
+	"2014-01-01",
+	"2013-01-01",
+	"2012-01-01",
+	"2011-01-01",
+	"2010-01-01",
+	"2009-01-01",
+	"2008-01-01",
+	"2007-01-01",
+	"2006-01-01",
+	"2005-01-01",
+	"2004-01-01",
+	"2003-01-01",
+};
+
+static unsigned int total_red_ball[34];
+static unsigned int total_blue_ball[17];
 
 int wget_page_from_url(char *url)
 {
@@ -259,21 +274,6 @@ void clean(void)
 			 "rm -fr ./.core_file  ./.catch_file_*  2> /dev/null");
 	system(system_cmd);
 }
-
-static char url_suffix[][12] = {
-	"2014-01-01",
-	"2013-01-01",
-	"2012-01-01",
-	"2011-01-01",
-	"2010-01-01",
-	"2009-01-01",
-	"2008-01-01",
-	"2007-01-01",
-	"2006-01-01",
-	"2005-01-01",
-	"2004-01-01",
-	"2003-01-01",
-};
 
 int main(int argc, char *argv[])
 {
