@@ -11,6 +11,11 @@
 #include<stdio.h>
 #include<stdlib.h>
 #include<string.h>
+#include<netdb.h>
+#include<error.h>
+#include<sys/socket.h>
+#include<sys/types.h>
+#include<netinet/in.h>
 
 #define BASE_URL "http://baidu.lecai.com/lottery/draw/list/50?d="
 #define WGET_PROGRAM	"wget"
@@ -36,6 +41,13 @@
 #define LOTTERY_RED_BALL_TAG	"<span class=\"ball_1\">"
 #define LOTTERY_BLUE_BALL_TAG	"<span class=\"ball_2\">"
 
+#define	HTTP_PORT				(80)
+#define	SOCKET_BUFFER_SIZE	(1024 * 4)
+
+#define	TRUE					(1)
+#define	FALSE					(0)
+typedef int bool;
+
 char system_cmd[SYSTEM_CMD_BUF_LENGTH_MAX];
 char current_file[FILE_NAME_LENGTH_MAX];
 
@@ -53,6 +65,7 @@ typedef enum {
 	phase_blue_ball = 4,
 } lecai_lottery_find_phase_enum;
 
+const char *host = "baidu.lecai.com";
 static char url_suffix[][12] = {
 	"2014-01-01",
 	"2013-01-01",
@@ -71,7 +84,94 @@ static char url_suffix[][12] = {
 static unsigned int total_red_ball[34];
 static unsigned int total_blue_ball[17];
 
-int wget_page_from_url(char *url)
+int get_page_use_socket(char *url)
+{
+	struct sockaddr_in servaddr;
+	struct hostent *remote_host;
+	FILE *catch_file = NULL;
+	char buffer[SOCKET_BUFFER_SIZE];
+	char send_buffer[512];
+	char *p = NULL, year[5];
+	int sockfd, len = 0;
+
+	if (strstr(url, BASE_URL)) {
+		p = url + strlen(host) + strlen("http://");
+	} else {
+		exit(1);
+	}
+
+	bzero(buffer, sizeof(buffer));
+	bzero(&servaddr, sizeof(servaddr));
+	bzero(send_buffer, sizeof(send_buffer));
+
+	snprintf(send_buffer, sizeof(send_buffer), "%s%s%s%s%s%s%s%s%s%s",
+			 "GET ",
+			 p,
+			 " HTTP/1.1\r\n",
+			 "Host:",
+			 host,
+			 "\r\n",
+			 "Accept: */*\r\n",
+			 "User-Agent: Mozilla/4.0(compatible)\r\n",
+			 "connection:Keep-Alive\r\n", "\r\n\r\n");
+
+	if ((remote_host = gethostbyname(host)) == 0) {
+		printf("Error resolving host: %s\n", host);
+		exit(1);
+	}
+
+	servaddr.sin_family = AF_INET;
+	servaddr.sin_port = htons(HTTP_PORT);
+	servaddr.sin_addr.s_addr =
+		((struct in_addr *)(remote_host->h_addr))->s_addr;
+
+	/* open socket */
+	if ((sockfd = socket(AF_INET, SOCK_STREAM, 0)) == -1) {
+		printf("Error opening socket!\n");
+		exit(1);
+	}
+
+	if (connect(sockfd, (void *)&servaddr, sizeof(servaddr)) == -1) {
+		printf("Error connecting to socket\n");
+		exit(1);
+	}
+
+	if (send(sockfd, send_buffer, strlen(send_buffer), 0) == -1) {
+		printf("Error in send\n");
+		exit(1);
+	}
+
+	strcpy(current_file, CATCH_FILE_NAME_PREFIX);
+	p = strchr(url, '=');
+	memcpy(year, p + 1, 4);
+	strcat(current_file, year);
+
+	do {
+		bzero(buffer, sizeof(buffer));
+		len = recv(sockfd, buffer, sizeof(buffer) - 1, 0);
+		if (len <= 0)
+			break;
+
+		*(buffer + len) = '\0';
+		catch_file = fopen(current_file, "a+");
+		if (catch_file == NULL) {
+			printf("Open file %s failed\n", current_file);
+			exit(1);
+		}
+
+		if (fwrite(buffer, len, 1, catch_file) != 1) {
+			printf("Write file[%s] error\n", current_file);
+		}
+
+		fclose(catch_file);
+	} while (len > 0);
+
+	close(sockfd);
+
+	return 0;
+}
+
+int get_page_use_wget(char *url)
 {
 	char *p = NULL, year[5];
 
@@ -297,10 +397,13 @@ int main(int argc, char *argv[])
 		strcat(url, url_suffix[index++]);
 		issues -= issues_one_year;
 
-		if (-1 == wget_page_from_url(url)) {
-			printf("Get baidu pages failed, the program exit\n");
-			return 0;
+		if (-1 == get_page_use_wget(url)) {
+			if (-1 == get_page_use_socket(url)) {
+				printf("Get baidu pages failed, the program exit\n");
+				exit(1);
+			}
 		}
+
 		page_parse();
 
 		if (index >= sizeof(url_suffix) / sizeof(url_suffix[0])) {
